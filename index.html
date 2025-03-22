@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <title>משחק זיהוי סימפטומים</title>
+    <style>
+        /* איפוס סגנונות ברירת מחדל */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background-image: url('./H.jpeg'); /* עדכון הנתיב - אותה תיקייה */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            min-height: 100vh;
+            position: relative;
+            color: white;
+        }
+
+        /* שכבה כהה מעל התמונה לשיפור הקריאות */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* שכבה שחורה שקופה */
+            z-index: 0;
+            pointer-events: none; /* מאפשר ללחוץ על אלמנטים מתחת */
+        }
+
+        /* כל האלמנטים צריכים להיות מעל השכבה הכהה */
+        #startButton, #scoreDisplay, #gameArea, .symptom, #victory-container {
+            position: relative;
+            z-index: 1;
+        }
+
+        #startButton {
+            padding: 20px 40px;
+            font-size: 24px;
+            background: linear-gradient(45deg, #00c6fb 0%, #005bea 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            margin: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .symptom {
+            padding: 35px 50px;
+            font-size: 24px;
+            margin: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            backdrop-filter: blur(5px);
+            min-width: 200px;
+            font-weight: bold;
+            line-height: 1.3;
+        }
+
+        .symptom:hover {
+            transform: scale(1.15);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+
+        .symptom.correct {
+            background: linear-gradient(45deg, #237cf1, #4cc2e6);
+            color: white;
+            font-size: 26px;
+        }
+
+        .symptom.incorrect {
+            background: linear-gradient(45deg, #ff416c, #ff4b2b);
+            color: white;
+            font-size: 26px;
+        }
+
+        #scoreDisplay {
+            font-size: 32px;
+            margin: 20px;
+            padding: 15px 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }
+
+        #gameArea {
+            position: relative;
+            z-index: 2;
+            background: transparent;
+        }
+
+        #victory-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        #victory-message {
+            font-size: 48px;
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            margin: 20px;
+            animation: scale 1s ease-in-out infinite;
+        }
+
+        .trophy {
+            font-size: 100px;
+            margin: 20px;
+            animation: bounce 2s ease infinite;
+        }
+
+        .firework {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        @keyframes scale {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes firework {
+            0% { transform: translate(0); }
+            100% { transform: translate(var(--x), var(--y)); opacity: 0; }
+        }
+
+        #play-again {
+            padding: 15px 30px;
+            font-size: 24px;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: transform 0.3s;
+        }
+
+        #play-again:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <button id="startButton" onclick="startGame()">התחל משחק</button>
+    <div id="scoreDisplay">ניקוד: 0</div>
+    <div id="gameArea"></div>
+
+    <div id="victory-container">
+        <div class="trophy">🏆</div>
+        <div id="victory-message">כל הכבוד! זיהיתם נכון את סימני ההיפוגליקמיה!</div>
+        <button id="play-again">שחק שוב</button>
+    </div>
+
+    <script>
+        let score = 0;
+        let gameInterval;
+        let symptomCounter = 0;
+
+        const correctSymptoms = [
+            "רעידות", "עצבנות", "בלבול", "טכיקרדיה", 
+            "זיעה קרה", "רעב", "חרדה", "חולשה", 
+            "חוסר יכולת להתרכז", "פרכוסים", "קומה"
+        ];
+
+        const incorrectSymptoms = [
+            "חום גבוה", "כאב בטן חריף", "פריחה עורית",
+            "קוצר נשימה", "כאבי מפרקים"
+        ];
+
+        function createSymptom() {
+            var symptom = document.createElement("button");
+            symptom.className = "symptom";
+            
+            const isCorrect = (symptomCounter % 3) !== 2;
+            const symptomsList = isCorrect ? correctSymptoms : incorrectSymptoms;
+            const randomSymptom = symptomsList[Math.floor(Math.random() * symptomsList.length)];
+            
+            symptom.innerHTML = randomSymptom;
+            symptom.dataset.correct = isCorrect;
+            
+            const safeMargin = 150;
+            symptom.style.position = 'absolute';
+            symptom.style.left = Math.random() * (window.innerWidth - 400 - safeMargin) + safeMargin + 'px';
+            symptom.style.top = (Math.random() * (window.innerHeight - 400 - safeMargin) + safeMargin) + 'px';
+            
+            symptom.onclick = function() {
+                if (this.dataset.correct === 'true') {
+                    score += 10;
+                    this.classList.add('correct');
+                } else {
+                    score -= 5;
+                    this.classList.add('incorrect');
+                }
+                updateScore();
+                setTimeout(() => this.remove(), 300);
+            };
+            
+            document.getElementById("gameArea").appendChild(symptom);
+            
+            setTimeout(() => {
+                if (symptom.parentNode) {
+                    symptom.remove();
+                }
+            }, 3000);
+
+            symptomCounter++;
+        }
+
+        function createFirework(x, y) {
+            const colors = ['#ff0', '#ff3', '#f62', '#f24', '#0ff', '#5ff', '#2ff'];
+            const firework = document.createElement('div');
+            firework.className = 'firework';
+            firework.style.left = x + 'px';
+            firework.style.top = y + 'px';
+            firework.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            for (let i = 0; i < 8; i++) {
+                const particle = firework.cloneNode(true);
+                const angle = (i * Math.PI * 2) / 8;
+                const distance = 100 + Math.random() * 50;
+                particle.style.setProperty('--x', Math.cos(angle) * distance + 'px');
+                particle.style.setProperty('--y', Math.sin(angle) * distance + 'px');
+                particle.style.animation = 'firework 1s ease-out forwards';
+                document.body.appendChild(particle);
+                setTimeout(() => particle.remove(), 1000);
+            }
+        }
+
+        function showVictory() {
+            const container = document.getElementById('victory-container');
+            container.style.display = 'flex';
+            
+            // יצירת זיקוקים במיקומים אקראיים
+            const createRandomFireworks = () => {
+                for (let i = 0; i < 3; i++) {
+                    const x = Math.random() * window.innerWidth;
+                    const y = Math.random() * window.innerHeight;
+                    createFirework(x, y);
+                }
+            };
+
+            // יצירת זיקוקים כל שנייה
+            createRandomFireworks();
+            const fireworksInterval = setInterval(createRandomFireworks, 1000);
+
+            // הפסקת הזיקוקים אחרי 5 שניות
+            setTimeout(() => clearInterval(fireworksInterval), 5000);
+        }
+
+        function updateScore() {
+            document.getElementById("scoreDisplay").innerHTML = "ניקוד: " + score;
+            
+            if (score >= 100) {
+                clearInterval(gameInterval);
+                document.querySelectorAll('.symptom').forEach(s => s.remove());
+                showVictory();
+            }
+        }
+
+        function startGame() {
+            score = 0;
+            symptomCounter = 0;
+            updateScore();
+            
+            if (gameInterval) {
+                clearInterval(gameInterval);
+            }
+            document.getElementById('gameArea').innerHTML = '';
+            document.getElementById('victory-container').style.display = 'none';
+            
+            createSymptom();
+            setTimeout(createSymptom, 500);
+            setTimeout(createSymptom, 1000);
+            
+            gameInterval = setInterval(createSymptom, 2000);
+        }
+
+        document.getElementById('play-again').onclick = startGame;
+    </script>
+</body>
+</html>
